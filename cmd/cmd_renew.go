@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	retry "github.com/avast/retry-go"
 	"github.com/go-acme/lego/v4/acme/api"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
@@ -127,7 +128,9 @@ func renew(ctx *cli.Context) error {
 	}
 
 	// Domains
-	return renewForDomains(ctx, certsStorage, bundle)
+	return retry.Do(func() error {
+		return renewForDomains(ctx, certsStorage, bundle)
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
 }
 
 func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
@@ -221,7 +224,9 @@ func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *Certif
 
 	addPathToMetadata(meta, domain, certRes, certsStorage)
 
-	return launchHook(ctx.String("renew-hook"), meta)
+	return retry.Do(func() error {
+		return launchHook(ctx.String("renew-hook"), meta)
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
 }
 
 func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
@@ -293,7 +298,9 @@ func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *Certificat
 
 	addPathToMetadata(meta, domain, certRes, certsStorage)
 
-	return launchHook(ctx.String("renew-hook"), meta)
+	return retry.Do(func() error {
+		return launchHook(ctx.String("renew-hook"), meta)
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
 }
 
 func needRenewal(x509Cert *x509.Certificate, domain string, days int) bool {
