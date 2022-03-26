@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"time"
 
+	retry "github.com/avast/retry-go"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/lego"
@@ -90,11 +91,15 @@ func renew(ctx *cli.Context) error {
 
 	// CSR
 	if ctx.GlobalIsSet("csr") {
-		return renewForCSR(ctx, certsStorage, bundle)
+		return retry.Do(func() error {
+			return renewForCSR(ctx, certsStorage, bundle)
+		}, retry.Delay(time.Second*3), retry.Attempts(10))
 	}
 
 	// Domains
-	return renewForDomains(ctx, certsStorage, bundle)
+	return retry.Do(func() error {
+		return renewForDomains(ctx, certsStorage, bundle)
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
 }
 
 func renewForDomains(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
@@ -155,7 +160,9 @@ func renewForDomains(ctx *cli.Context, certsStorage *CertificatesStorage, bundle
 	meta[renewEnvCertPath] = certsStorage.GetFileName(domain, ".crt")
 	meta[renewEnvCertKeyPath] = certsStorage.GetFileName(domain, ".key")
 
-	return launchHook(ctx.String("renew-hook"), meta)
+	return retry.Do(func() error {
+		return launchHook(ctx.String("renew-hook"), meta)
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
 }
 
 func renewForCSR(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
@@ -202,7 +209,9 @@ func renewForCSR(ctx *cli.Context, certsStorage *CertificatesStorage, bundle boo
 	meta[renewEnvCertPath] = certsStorage.GetFileName(domain, ".crt")
 	meta[renewEnvCertKeyPath] = certsStorage.GetFileName(domain, ".key")
 
-	return launchHook(ctx.String("renew-hook"), meta)
+	return retry.Do(func() error {
+		return launchHook(ctx.String("renew-hook"), meta)
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
 }
 
 func needRenewal(x509Cert *x509.Certificate, domain string, days int) bool {
