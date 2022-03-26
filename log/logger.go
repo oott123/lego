@@ -21,13 +21,15 @@ type StdLogger interface {
 // Fatal writes a log entry.
 // It uses Logger if not nil, otherwise it uses the default log.Logger.
 func Fatal(args ...interface{}) {
-	Logger.Fatal(args...)
+	Logger.Print(args...)
+	panic("fatal error")
 }
 
 // Fatalf writes a log entry.
 // It uses Logger if not nil, otherwise it uses the default log.Logger.
 func Fatalf(format string, args ...interface{}) {
-	Logger.Fatalf(format, args...)
+	Logger.Printf("[FATA] "+format, args...)
+	panic("fatal error")
 }
 
 // Print writes a log entry.

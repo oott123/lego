@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"math/rand"
 	"os"
 	"time"
@@ -117,6 +118,23 @@ func renew(ctx *cli.Context) error {
 	return
 }
 
+func myRetry(f retry.RetryableFunc) error {
+	return retry.Do(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("recover from panic")
+				log.Printf("retrying due to unexpected error")
+				return
+			}
+		}()
+		err = f()
+		if err != nil {
+			log.Printf("retrying due to error: %s", err)
+		}
+		return
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
+}
+
 func renew(ctx *cli.Context) error {
 	certsStorage := NewCertificatesStorage(ctx)
 
@@ -128,9 +146,9 @@ func renew(ctx *cli.Context) error {
 	}
 
 	// Domains
-	return retry.Do(func() error {
+	return myRetry(func() (err error) {
 		return renewForDomains(ctx, certsStorage, bundle)
-	}, retry.Delay(time.Second*3), retry.Attempts(10))
+	})
 }
 
 func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
@@ -224,9 +242,9 @@ func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *Certif
 
 	addPathToMetadata(meta, domain, certRes, certsStorage)
 
-	return retry.Do(func() error {
+	return myRetry(func() (err error) {
 		return launchHook(ctx.String("renew-hook"), meta)
-	}, retry.Delay(time.Second*3), retry.Attempts(10))
+	})
 }
 
 func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
@@ -298,9 +316,9 @@ func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *Certificat
 
 	addPathToMetadata(meta, domain, certRes, certsStorage)
 
-	return retry.Do(func() error {
+	return myRetry(func() (err error) {
 		return launchHook(ctx.String("renew-hook"), meta)
-	}, retry.Delay(time.Second*3), retry.Attempts(10))
+	})
 }
 
 func needRenewal(x509Cert *x509.Certificate, domain string, days int) bool {
