@@ -3,6 +3,7 @@ package cmd
 import (
 	"crypto"
 	"crypto/x509"
+	"fmt"
 	"time"
 
 	retry "github.com/avast/retry-go"
@@ -84,6 +85,23 @@ func renewSetup(ctx *cli.Context) (client *lego.Client, meta map[string]string) 
 	return
 }
 
+func myRetry(f retry.RetryableFunc) error {
+	return retry.Do(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("recover from panic")
+				log.Printf("retrying due to unexpected error")
+				return
+			}
+		}()
+		err = f()
+		if err != nil {
+			log.Printf("retrying due to error: %s", err)
+		}
+		return
+	}, retry.Delay(time.Second*3), retry.Attempts(10))
+}
+
 func renew(ctx *cli.Context) error {
 	certsStorage := NewCertificatesStorage(ctx)
 
@@ -91,15 +109,15 @@ func renew(ctx *cli.Context) error {
 
 	// CSR
 	if ctx.GlobalIsSet("csr") {
-		return retry.Do(func() error {
+		return myRetry(func() (err error) {
 			return renewForCSR(ctx, certsStorage, bundle)
-		}, retry.Delay(time.Second*3), retry.Attempts(10))
+		})
 	}
 
 	// Domains
-	return retry.Do(func() error {
+	return myRetry(func() (err error) {
 		return renewForDomains(ctx, certsStorage, bundle)
-	}, retry.Delay(time.Second*3), retry.Attempts(10))
+	})
 }
 
 func renewForDomains(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
@@ -160,9 +178,9 @@ func renewForDomains(ctx *cli.Context, certsStorage *CertificatesStorage, bundle
 	meta[renewEnvCertPath] = certsStorage.GetFileName(domain, ".crt")
 	meta[renewEnvCertKeyPath] = certsStorage.GetFileName(domain, ".key")
 
-	return retry.Do(func() error {
+	return myRetry(func() (err error) {
 		return launchHook(ctx.String("renew-hook"), meta)
-	}, retry.Delay(time.Second*3), retry.Attempts(10))
+	})
 }
 
 func renewForCSR(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
@@ -209,9 +227,9 @@ func renewForCSR(ctx *cli.Context, certsStorage *CertificatesStorage, bundle boo
 	meta[renewEnvCertPath] = certsStorage.GetFileName(domain, ".crt")
 	meta[renewEnvCertKeyPath] = certsStorage.GetFileName(domain, ".key")
 
-	return retry.Do(func() error {
+	return myRetry(func() (err error) {
 		return launchHook(ctx.String("renew-hook"), meta)
-	}, retry.Delay(time.Second*3), retry.Attempts(10))
+	})
 }
 
 func needRenewal(x509Cert *x509.Certificate, domain string, days int) bool {
