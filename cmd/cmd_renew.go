@@ -70,7 +70,7 @@ func createRenew() cli.Command {
 	}
 }
 
-func renew(ctx *cli.Context) error {
+func renewSetup(ctx *cli.Context) (client *lego.Client, meta map[string]string) {
 	account, client := setup(ctx, NewAccountsStorage(ctx))
 	setupChallenges(ctx, client)
 
@@ -78,22 +78,26 @@ func renew(ctx *cli.Context) error {
 		log.Fatalf("Account %s is not registered. Use 'run' to register a new account.\n", account.Email)
 	}
 
+	meta = map[string]string{renewEnvAccountEmail: account.Email}
+
+	return
+}
+
+func renew(ctx *cli.Context) error {
 	certsStorage := NewCertificatesStorage(ctx)
 
 	bundle := !ctx.Bool("no-bundle")
 
-	meta := map[string]string{renewEnvAccountEmail: account.Email}
-
 	// CSR
 	if ctx.GlobalIsSet("csr") {
-		return renewForCSR(ctx, client, certsStorage, bundle, meta)
+		return renewForCSR(ctx, certsStorage, bundle)
 	}
 
 	// Domains
-	return renewForDomains(ctx, client, certsStorage, bundle, meta)
+	return renewForDomains(ctx, certsStorage, bundle)
 }
 
-func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
+func renewForDomains(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
 	domains := ctx.GlobalStringSlice("domains")
 	domain := domains[0]
 
@@ -110,6 +114,8 @@ func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *Certif
 	if !needRenewal(cert, domain, ctx.Int("days")) {
 		return nil
 	}
+
+	client, meta := renewSetup(ctx)
 
 	// This is just meant to be informal for the user.
 	timeLeft := cert.NotAfter.Sub(time.Now().UTC())
@@ -152,7 +158,7 @@ func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *Certif
 	return launchHook(ctx.String("renew-hook"), meta)
 }
 
-func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
+func renewForCSR(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
 	csr, err := readCSRFile(ctx.GlobalString("csr"))
 	if err != nil {
 		log.Fatal(err)
@@ -173,6 +179,8 @@ func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *Certificat
 	if !needRenewal(cert, domain, ctx.Int("days")) {
 		return nil
 	}
+
+	client, meta := renewSetup(ctx)
 
 	// This is just meant to be informal for the user.
 	timeLeft := cert.NotAfter.Sub(time.Now().UTC())
