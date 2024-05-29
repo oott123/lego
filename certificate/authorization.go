@@ -12,7 +12,9 @@ const (
 	// limited on the "new-reg", "new-authz" and "new-cert" endpoints.
 	// From the documentation the limitation is 20 requests per second,
 	// but using 20 as value doesn't work but 18 do.
-	overallRequestLimit = 18
+
+	// FUCK ZEROSSL no 18 requests allowed use 2 instead!
+	overallRequestLimit = 2
 )
 
 func (c *Certifier) getAuthorizations(order acme.ExtendedOrder) ([]acme.Authorization, error) {
