@@ -105,7 +105,7 @@ func createRenew() *cli.Command {
 	}
 }
 
-func renew(ctx *cli.Context) error {
+func renewSetup(ctx *cli.Context) (client *lego.Client, meta map[string]string) {
 	account, client := setup(ctx, NewAccountsStorage(ctx))
 	setupChallenges(ctx, client)
 
@@ -142,7 +142,7 @@ func renew(ctx *cli.Context) error {
 
 	// CSR
 	if ctx.IsSet("csr") {
-		return renewForCSR(ctx, client, certsStorage, bundle, meta)
+		return renewForCSR(ctx, certsStorage, bundle)
 	}
 
 	// Domains
@@ -151,7 +151,7 @@ func renew(ctx *cli.Context) error {
 	})
 }
 
-func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
+func renewForDomains(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
 	domains := ctx.StringSlice("domains")
 	domain := domains[0]
 
@@ -165,24 +165,11 @@ func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *Certif
 
 	cert := certificates[0]
 
-	var ariRenewalTime *time.Time
-	if ctx.Bool("ari-enable") {
-		ariRenewalTime = getARIRenewalTime(ctx, cert, domain, client)
-		if ariRenewalTime != nil {
-			now := time.Now().UTC()
-			// Figure out if we need to sleep before renewing.
-			if ariRenewalTime.After(now) {
-				log.Infof("[%s] Sleeping %s until renewal time %s", domain, ariRenewalTime.Sub(now), ariRenewalTime)
-				time.Sleep(ariRenewalTime.Sub(now))
-			}
-		}
-	}
+	client, meta := renewSetup(ctx)
 
-	if ariRenewalTime == nil && !needRenewal(cert, domain, ctx.Int("days")) {
+	if !needRenewal(cert, domain, ctx.Int("days")) {
 		return nil
 	}
-
-	client, meta := renewSetup(ctx)
 
 	// This is just meant to be informal for the user.
 	timeLeft := cert.NotAfter.Sub(time.Now().UTC())
@@ -247,7 +234,7 @@ func renewForDomains(ctx *cli.Context, client *lego.Client, certsStorage *Certif
 	})
 }
 
-func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *CertificatesStorage, bundle bool, meta map[string]string) error {
+func renewForCSR(ctx *cli.Context, certsStorage *CertificatesStorage, bundle bool) error {
 	csr, err := readCSRFile(ctx.String("csr"))
 	if err != nil {
 		log.Fatal(err)
@@ -268,20 +255,7 @@ func renewForCSR(ctx *cli.Context, client *lego.Client, certsStorage *Certificat
 
 	cert := certificates[0]
 
-	var ariRenewalTime *time.Time
-	if ctx.Bool("ari-enable") {
-		ariRenewalTime = getARIRenewalTime(ctx, cert, domain, client)
-		if ariRenewalTime != nil {
-			now := time.Now().UTC()
-			// Figure out if we need to sleep before renewing.
-			if ariRenewalTime.After(now) {
-				log.Infof("[%s] Sleeping %s until renewal time %s", domain, ariRenewalTime.Sub(now), ariRenewalTime)
-				time.Sleep(ariRenewalTime.Sub(now))
-			}
-		}
-	}
-
-	if ariRenewalTime == nil && !needRenewal(cert, domain, ctx.Int("days")) {
+	if !needRenewal(cert, domain, ctx.Int("days")) {
 		return nil
 	}
 
