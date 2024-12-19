@@ -4,7 +4,8 @@ on:
   push:
     tags:
       - v*-fork*
-
+permissions:
+  contents: write 
 jobs:
 
   release:
@@ -63,6 +64,4 @@ jobs:
           version: latest
           args: release -p 1 --clean --timeout=90m
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_REPO }}
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          AUR_KEY: ${{ secrets.AUR_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
